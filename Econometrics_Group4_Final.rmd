@@ -1,0 +1,923 @@
+---
+title: "Econometric Project"
+author: Apurva Shekhar | Ritu Ranjani Ravi Shankar | Suchita Negi | Vidhi Gandhi
+date: May 28, 2020
+output:
+  rmarkdown::html_document:
+    df_print: paged
+    theme: journal
+---
+## <span style="color: darkblue;"> Does Pregnancy cause Diabetes? </span>
+
+```{r setup, cache = F, echo = F, message = F, warning = F, tidy = F, results='hide'}
+rm(list=ls())
+options(width = 100)
+knitr::opts_chunk$set(message = F, error = F, warning = F, comment = NA, fig.align = 'center', dpi = 100, tidy = F)
+
+```
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(tidyverse) 
+library(dplyr)
+library(ggplot2)
+library(car)
+library(lattice)
+library(tidyr)
+library(caret)
+library(MASS)
+library(broom)
+library(ROCR)
+library(psych)
+library(caTools)
+library(stargazer)
+library(lmtest)
+library(sandwich)
+library(ggeffects)
+library(ggcorrplot)
+library(corrr)
+library(lattice)
+library(erer)
+library(corrplot)
+library(DataExplorer)
+library(DMwR)
+library(mice)
+```
+
+
+## <span style="color: darkblue;"> Agenda:</span>
+
+* Introduction
+
+* Data reading and Description of some of the variables of the dataset
+
+* Data Pre-Processing and Feature Engineering
+
+* Exploratory Data Analysis
+
+* Regression - Effect of pregnancies on diabetes
+
+    + Descriptive statistics using Stargazer
+
+* Conclusion
+
+
+## <span style="color: darkblue;"> Introduction </span>
+
+* This study was carried out to investigate the significance of health-related predictors of diabetes in Pima Indian Women. 
+* Many types of research by the U.S health department show that Native Americans are at more risk of getting diabetes than any other racial group. 
+* This dataset contains patient details who are of Pima Indians/Native American origin and are females of at least 21 years old.
+* This dataset is originally from the National Institute of Diabetes and Digestive and Kidney Diseases and the variables of this dataset are selected based on certain criteria from a larger dataset. 
+
+* Data Source: https://www.kaggle.com/uciml/pima-indians-diabetes-database
+
+
+## <span style="color: darkblue;"> Business Objective </span>
+
+* Identify if the number of times a female is pregnant has any impact on diabetes
+
+### <span style="color: darkblue;">  Why is this question important?</span>
+
+* This exploration is worthy as researches have shown that women of Native American(Pima Indian Origin), White or Asian origin are at more risk of getting Diabetes called Gestational Diabetes when they are pregnant. For most of them this Diabetes converts to type 2 diabetes after the pregnancy goes away.
+
+### <span style="color: darkblue;"> Method Used </span>
+
+*Logit - Binary Logistic regression*
+
+We are not using LPM/Probit and have decided to proceed with Logit model because,
+
+* LPM models the probabilty as linear function of X and also LPM allows the probability value to be greater than 1.
+
+* Logit over Probit due to the convinence and ease of use.
+
+
+## <span style="color: darkblue;"> Dataset </span>
+* Number of Rows: 768
+* Number of columns:  9 (1 - dependent, 8 - independent variables)
+
+* Variable description:
+   + Pregnancies - Number of times pregnant 
+   + Glucose - Plasma glucose concentration - a 2 hours in an oral glucose tolerance test 
+   + BloodPressure - Diastolic blood pressure (mm Hg) 
+   + SkinThickness - Triceps skinfold thickness (mm) 
+   + Insulin - 2-Hour serum insulin (mu U/ml) 
+   + BMI - Body mass index (weight in kg/(height in m)^2) 
+   + Diabetes pedigree function - A function that represents how likely they are to get the disease by extrapolating from their ancestor’s history.
+
+
+## <span style="color: darkblue;"> Does the dataset contain all variables that account for diabetes ? </span>
+
+- Diabetes is believed to have a strong genetic link, meaning that it tends to run in families. 
+
+The major factors/risks that causes diabetes are the following : 
+
+1) Sedentary Lifestyle(Obesity or being overweight) : 
+                 This factor is captured in our dataset through the variable - <b>BMI</b>
+2) Gestational diabetes or giving birth to a baby :
+                This factor is attributed to <b>the number of pregnancy a patient has had (Variable of Interest)</b>
+3) strong genetic link : 
+                Captured by the variable - <b>Diabetespedigreefunction</b>
+4) Aging: Increasing age is a significant risk factor for type 2 diabetes. 
+                Captured by the variable : <b>Age</b>
+5) High Blood Pressure : 
+                Captured by the variable - <b>bloodpressure</b>
+6) Glucose/Insulin : Insulin and other hormones control the amount of glucose in your bloodstream.People with diabetes either don't make insulin or their body's cells can no longer use their insulin. This leads to high blood sugars.
+                Captured by variable - <b>Glucose and Insulin</b>
+                
+
+From the above medical domain research, we could see that, the dataset contains all major factors that could cause diabetes.
+
+Recent studies have shown that skinfolds thickness were associated with 2·8-fold and 6·4-fold risk of developing T2DM(Type 2 Diabetes).
+This factor is also attributed in our dataset through <b>SkinThickness</b>
+
+
+## <span style="color: darkblue;"> Dependent Variable and Variable of Interest: </span>
+* Null Hypothesis: Pregnancy doesn’t cause Diabetes.
+* Alternative Hypothesis: Pregnancy causes Diabetes.
+* Dependent variable: does the person have Diabetes(=1) or not(=0)?
+* Independent Variables:
+    + Variable of interest: Pregnancies
+    + Control Variables: BMI, Age, Glucose,DiabetesPedigreeFunction, BloodPressure, SkinThickness.
+
+```{r pressure, echo=FALSE}
+pima <- read.csv("diabetes.csv")
+head(pima)
+```
+
+
+#### Descriptive statistics of the data
+```{r}
+stargazer(pima, type="text", median=TRUE, iqr=TRUE,digits=1, title="Descriptive Statistics")
+```
+
+
+## <span style="color: darkblue;"> Data cleaning </span>
+```{r}
+# check for NA
+sapply(pima, function(x) sum(is.na(x)))
+```
+
+
+* The dataset revealed many abnormal values for biological measures. Variables such as Skin Thickness and Glucose had 227 and 374 zero-values respectively. 
+* The fact that both measures cannot hold zero values indicated that the missing values in the dataset were represented as zero values in the dataset. 
+* The missing values in the dataset constituted to about 30% of the observations in the dataset. 
+* As removing these values would result in significant information loss, kNN imputation was performed to impute the missing values in the data set. 
+
+* Only obvious wrong values in the dataset (zero values) were imputed. Large outliers in the variables were not handled.
+
+```{r}
+# Dealing with zeros
+missing_data <- pima[,setdiff(names(pima), c('Outcome', 'Pregnancies'))]
+features_miss_num <- apply(missing_data, 2, function(x) sum(x <= 0))
+features_miss <- names(missing_data)[ features_miss_num > 0]
+
+rows_miss <- apply(missing_data, 1, function(x) sum(x <= 0) >= 1) 
+sum(rows_miss)
+```
+
+```{r}
+missing_data[missing_data <= 0] <- NA
+pima[, names(missing_data)] <- missing_data
+
+# KNN imputation
+orig_data <- pima
+colSums(is.na(pima))
+
+```
+
+```{r}
+pima[,c(-8,-9)] <- knnImputation(pima[,c(-8,-9)], k = 3)
+sapply(pima, function(x) sum(is.na(x)))
+```
+
+### <span style="color: darkblue;"> Outlier Detection </span>
+
+```{r}
+par(mfrow=c(3,3))
+boxplot(x=pima$Age, xlab="Age",col=c('lightgreen'))
+boxplot(x=pima$Pregnancies, xlab="Pregnancies",col=c('lightgreen'))
+boxplot(x=pima$Glucose, xlab='Glucose',col=c('lightgreen'))
+boxplot(x=pima$BMI, xlab='BMI',col=c('lightgreen'))
+boxplot(x=pima$Insulin, xlab='Insulin',col=c('lightgreen'))
+boxplot(x=pima$BloodPressure, xlab='BloodPressure',col=c('lightgreen'))
+boxplot(x=pima$SkinThickness, xlab='SkinThickness',col=c('lightgreen'))
+boxplot(x=pima$DiabetesPedigreeFunction, xlab='DiabetesPedigreeFunction',col=c('lightgreen'))
+#boxplot(x=pima$Outcome, xlab='Outcome',col=c('lightgreen'))
+```
+
+* From the above plot it is clear we have outlier values in our data. But since this is medical data, we cannot remove or normalise those outlier values.
+
+### <span style="color: darkblue;"> Correlation Plot </span>
+```{r}
+ggcorrplot(cor(pima, use="pairwise.complete.obs"),  hc.order=FALSE, type='lower',lab=TRUE, lab_size=2.5)
+```
+
+
+From the correlation plot, we could see that -
+
+* Pregnancy and Age are highly correlated
+
+* Glucose and Insulin are highly correlated
+
+* SkinThickness and BMI are highly correlated
+
+* Glucose and Diabetes(outcome) are moderately correlated
+
+This gives us the idea of mulitcollinearity issue, that could arise when including two highly correlated variables in our model.
+
+*Correlation is not causation.*
+Though, the correlation plot gives us an idea of the variables that impacts the outcome variable and also are correlated with our variable of interest, to identify the control variables for logit model, we perform Exploratory Data Analysis. 
+
+
+## <span style="color: darkblue;">T-test </span>
+
+Conducting t-tests enables us to identify variables that are statistically significant.
+
+*We perform two t-test :* 
+
+**Test 1:** 
+
+<i>T-test of all X variables against Variable of interest-Pregnancies</i>
+
+```{r}
+lapply(pima[,c("Glucose", "DiabetesPedigreeFunction", "BMI","Insulin",'Age','BloodPressure','SkinThickness')], function(x) anova(lm(x ~ pima$Pregnancies)))
+```
+
+**Test 2: **
+
+<i>T-test of all X variables against Dependent Variables - Outcome</i>
+
+```{r}
+lapply(pima[,c("Glucose", "DiabetesPedigreeFunction", "BMI","Insulin",'Age','BloodPressure','SkinThickness')], function(x) anova(lm(x ~ pima$Outcome)))
+```
+
+From the above t-tests, we saw that DiabetesPedigreeFunction and BMI are not signifcant variables against Pregnancies.
+However, both  DiabetesPedigreeFunction and BMI are significant at 0.1% interval when tested against outcome(diabetes/not).
+Also, since few variables are highly correlated with other variables, we could conclude which variables to include in our model only after performing Exploratory Data Analysis.
+
+
+## <span style="color: darkblue;"> Exploratory Data Analysis: </span>
+
+Inspecting the distribution of dependent variables and independent variables to identify control variables that also affect diabetes outcome along with pregnancies.
+
+*Distribution of Outcome variable*
+```{r}
+pima$Outcome <- factor(pima$Outcome)
+
+ggplot(pima,aes(Outcome,fill = Outcome)) +
+  geom_bar() + 
+  ggtitle("Distribution of Outcome variable")
+```
+
+* We have approximately 500 females with no diabetes and more than 350 females with diabetes in our data.
+
+**<span style="color: darkblue;">A. Distribution of variable of interest over outcome</span>**
+
+*1. Distribution of Number of pregnancies*
+```{r}
+p1 <- ggplot(pima, aes(x = Outcome, y = Pregnancies,fill = factor(Outcome))) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Number of pregnancies Vs Diabetes")
+
+p2 <- ggplot(pima,aes(x = Pregnancies,fill = factor(Outcome))) + 
+  geom_bar(position = "Dodge") + 
+  scale_x_continuous(limits = c(0,16)) +
+  theme(legend.position = "bottom") +
+  labs(title = "Pregnancies Vs Outcome")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* From the plot between Pregnancies and outcome, it appears that as the number of Pregnancies increases, the risk of getting diabetes increases.
+
+**<span style="color: darkblue;">B. Distribution of control variables over outcome</span>**
+
+*1. Distribution of Glucose variable*
+```{r}
+p1 <- ggplot(pima, aes(x = Outcome, y = Glucose,fill = Outcome)) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of glucose in women Vs Diabetes")
+
+p2 <- ggplot(pima, aes(x = Glucose, color = Outcome, fill = Outcome)) +
+  geom_density(alpha = 0.8) +
+  theme(legend.position = "bottom") +
+  labs(x = "Glucose", y = "Density", title = "Density plot of glucose")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* There’s a clear difference in the amount of Glucose present in the female who have been diagnosed with Diabetes and those who haven’t. 
+Higher the glucose levels, more prone is the female to diabetes.
+
+*2. Distribution of BloodPressure variable*
+```{r}
+
+p1 <- ggplot(pima, aes(x = Outcome, y = BloodPressure,fill = Outcome)) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of blood pressure in women Vs Diabetes")
+
+p2 <- ggplot(pima, aes(x = BloodPressure, color = Outcome, fill = Outcome)) +
+  geom_density(alpha = 0.8) +
+  theme(legend.position = "bottom") +
+  labs(x = "Blood pressure", y = "Density", title = "Density plot of Blood pressure")
+
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* There is no clear difference seen in the two categories of females who have and don’t have Diabetes.
+This shows that Blood Pressure might not be a good predictor of the response variable.
+
+*3. Distribution of SkinThickness variable*
+```{r}
+p1 <- ggplot(pima, aes(x = Outcome, y = SkinThickness,fill = Outcome)) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of skin thickness Vs Diabetes")
+
+p2 <- ggplot(pima, aes(x = SkinThickness, color = Outcome, fill = Outcome)) +
+  geom_density(alpha = 0.8) +
+  theme(legend.position = "bottom") +
+  labs(x = "Skin thickness", y = "Density", title = "Density plot of skin thickness")
+
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* There is no clear difference seen in the two categories of females who have and don’t have Diabetes.
+This shows that Skin Thickness might not be a good predictor of the response variable.
+
+*4. Distribution of Insulin variable*
+```{r}
+p1 <- ggplot(pima, aes(x = Outcome, y = Insulin,fill = Outcome)) +
+  geom_boxplot() + 
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of Insulin content Vs Diabetes")
+
+p2 <- ggplot(pima, aes(Insulin, fill = Outcome)) +
+  geom_histogram(binwidth=10) +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of Insulin content Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+```
+
+* Females with higher insulin count are slightly more prone to diabetes than with lower insulin count.
+
+*5. Distribution of BMI variable*
+```{r}
+
+p1 <- ggplot(pima, aes(x = Outcome, y = BMI,fill = Outcome)) +
+  geom_boxplot(binwidth = 5) +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of BMI of women Vs Diabetes")
+
+p2 <- ggplot(pima, aes(BMI, fill = Outcome)) +
+  geom_histogram() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of BMI of women Vs Diabetes")
+
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* All the females who had Diabetes had a BMI greater than 25, which is above the normal levels. On the other hand, females who did not have Diabetes had a BMI ranging from 18 to 60. Females with low BMI are less likely to have diabetes.
+
+
+*6. Distribution of DiabetesPedigreeFunction variable*
+```{r}
+
+p1 <- ggplot(pima, aes(x = Outcome, y = DiabetesPedigreeFunction,fill = Outcome)) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of DPF of women Vs Diabetes")
+
+
+p2 <- ggplot(pima, aes(DiabetesPedigreeFunction,fill = Outcome)) +
+  geom_histogram() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of DPF Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* Diabetes pedigree function is a function that scores the likelihood of diabetes based on family history.
+Females with higher DPF value are more likely to have diabetes than with lower values.
+
+*7. Distribution of Age variable*
+```{r}
+
+p1 <- ggplot(pima, aes(x = Outcome, y = Age,fill = Outcome)) +
+  geom_boxplot() +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of Age of women Vs Diabetes")
+
+
+p2 <- ggplot(pima, aes(Age, fill = Outcome)) +
+  geom_histogram(binwidth = 5) +
+  theme(legend.position = "bottom") +
+  ggtitle("Variation of Age of women Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+*  Females over the age of 28 are more likely to have diabetes than females below the age of 28. 
+
+**<span style="color: darkblue;">C. Cluster analysis of impact of BMI,Age,Glucose on Outcome</span>**
+```{r}
+d<-pima
+d$Age <- ifelse(d$Age < 30, "<30 yrs", ">= 30 yrs")
+
+ggplot(d, aes(x = Glucose, y = BMI)) +
+  geom_rect(aes(linetype = "High BMI - Diabetic"), xmin = 160, ymax = 40, fill = NA, xmax = 200, 
+            ymin = 25, col = "black") + 
+  geom_rect(aes(linetype = "Low BMI - Not Diabetic"), xmin = 0, ymax = 25, fill = NA, xmax = 120, 
+            ymin = 10, col = "black") + 
+  geom_point(aes(col = factor(Outcome), shape = factor(Age)), size = 3) +
+  scale_color_brewer(name = "Type", palette = "Set1") +
+  scale_shape(name = "Age") +
+  scale_linetype_manual(values = c("High BMI - Diabetic" = "dotted", "Low BMI - Not Diabetic" = "dashed"),
+                        name = "Segment") + theme_minimal()
+
+```
+
+*The dotted box toward the right side of the plot indicates:*
+
+* High BMI correlates with being diabetic when combined with glucose
+* Females over the age of 30 are more prone to diabetes than females below 30
+
+**<span style="color: darkblue;">D. Distribution of Pregnancies and control variables Vs Outcome:</span>**
+
+```{r}
+#Pregnancies with Age Vs Diabetes
+p1 <- ggplot(pima, aes(x = Pregnancies, y = Age)) +
+  geom_point(aes(color=Outcome)) + 
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with Age Vs Diabetes")
+
+#Pregnancies with Insulin Vs Diabetes
+p2 <- ggplot(pima,aes(x=Pregnancies,y=Insulin))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with Insulin Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+
+```
+
+* No clear boundary can be drawn that separates Non-diabetic and Diabetic women based on Number of Pregnancies vs Age
+* Non-diabetic women seemed to have lower levels of Insulin  as opposed to Diabetic women who recorded low to high levels of Insulin. There is no clear pattern observed with increase in number of pregnancies and insulin count on Diabetes outcome.  
+
+```{r}
+#Pregnancies with BP Vs Diabetes
+p1 <- ggplot(pima,aes(x=Pregnancies,y=BloodPressure))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with BP Vs Diabetes")
+
+#Pregnancies with SkinThickness Vs Diabetes
+p2 <- ggplot(pima,aes(x=Pregnancies,y=SkinThickness))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with SkinThickness Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* Women who have Diabetes can't be differentiated from those who don’t have based on BP values
+* Women with low values of Skin Thickness are less prone to have Diabetes. However, there is no significant impact of SkinThickness along with increase in pregnancies on the Outcome 
+
+```{r}
+#Pregnancies with BMI Vs Diabetes
+p1 <- ggplot(pima,aes(x=Pregnancies,y=BMI))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with BMI Vs Diabetes")
+
+#Pregnancies with Glucose Vs Diabetes
+p2 <- ggplot(pima,aes(x=Pregnancies,y=Glucose))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with Glucose Vs Diabetes")
+
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
+
+* Pima females with fewer number of pregnancy, had diabetes at larger ranges of BMI(above 30). As the number of pregnancies increased, Pima female with lower BMI were more prone to diabetes.
+For females with diabetes, there were more outliers in which a female who had very few pregnancies had very high BMIs. For females who didnt have diabetes, the female who had about 6-8 pregnancies seemed to have relatively high BMIs.
+*  Higher the glucose count, more prone is the female to getting diabetes. As the number of pregnancies increase, we see that even at comparatively lower glucose levels, pima indian women are more prone to getting diabetes.
+
+
+```{r}
+#Pregnancies with DiabetesPedigreeFunction Vs Diabetes
+ggplot(pima,aes(x=Pregnancies,y=DiabetesPedigreeFunction))+
+  geom_point(aes(color=Outcome))+
+  theme(legend.position = "bottom") +
+  ggtitle("Pregnancies with DiabetesPedigreeFunction Vs Diabetes")+stat_smooth(method="lm",se=FALSE, col = "blue" )
+
+```
+
+* Pima females with high diabetespedigree function are more prone to getting diabetes. However, we also see from above graph that, even if the likelihood of getting diabetes is low for few patients, because they have more pregnancy count(pregnancy count around 6-9) they are more prone to getting diabetes.
+
+## <span style="color: darkblue;"> From our Exploratory Analysis, we see that : </span>
+
+* Variables that have substantial effect on Outcome:
+  + Glucose
+  + DiabetesPedigreeFunction
+  + BMI
+  + Insulin
+  + Age
+
+* Variables that have substantial effect on both Pregnancies and Outcome:
+  + Glucose
+  + DiabetesPedigreeFunction
+  + BMI
+
+We believe through the correlation plot, t-test and exploratory analysis, combined with our intuition from survey, variables - Age, Glucose,BMI,DiabetesPedigreeFunction should be included as control variables for our variable of interest - Pregnancies in the model. 
+  
+
+
+## <span style="color: darkblue;"> Regression : Effect of Pregnancies on Diabetes </span>
+
+We perform logit regression to observe the causal effect of pregnancies on Diabetes along with other variables.
+
+We run different model by including the control variables one by one.
+
+##### <span style="color: darkblue;">Adding variable 'Age' in the base model along with the variable of interest. </span>
+
+```{r}
+l1 = glm(Outcome~Pregnancies, family=binomial, x=TRUE,  data=pima)
+l2 = glm(Outcome~Pregnancies+Age, family=binomial, x=TRUE,  data=pima)
+
+
+stargazer(l1, l2, se=list(NULL, NULL), 
+          column.labels=c("logit-1", "logit-2"),
+          title="Logit- Pregnancy and Diabetes", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l1 model
+pseudoR2=(l1$null.deviance-l1$deviance)/l1$null.deviance
+print(paste("pseudo_R2 for model 1",pseudoR2)) # 0.0375185004267976
+
+## For l2 model
+pseudoR2=(l2$null.deviance-l2$deviance)/l2$null.deviance
+print(paste("pseudo_R2 for model 2",pseudoR2)) #0.0527293813429582
+
+## Calculates marginal effect of the regressors
+fm1a=maBina(l1, x.mean=TRUE, rev.dum=TRUE, digits=3)
+fm2a=maBina(l2, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, se=list(NULL, NULL), 
+          title="Logit- Marginal Effects", type="text", 
+          column.labels=c("logit-1", "logit-2"),
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+```
+
+1. Adding 'Age' in the model increased log likelihood of the second model from -478.105 to -470.549. 
+2. Omitted variable bias corrected- By adding statistically significant variable 'Age',the coefficient of VOI went down 
+  from 0.031 to 0.018. Therefore, adding the variable 'age' corrected 'upward omitted variable bais'. 
+3. The AIC(Akaike Inf.Crit) has reduced from 960.210 to 947.098, showing that the model is getting better with an addition of the variable.
+    The lower the AIC value the better.
+
+**Pseudo_r2:**
+     Pseudo_R2 increased from 0.03751 to 0.05272. This shows that adding the variabale 'age' increased the explanatory power of the model from 3.7% to 5.2%.
+
+##### <span style="color: darkblue;">Adding variable 'BMI' in the model </span>
+              
+```{r}
+l3 = glm(Outcome~Pregnancies+Age+BMI, family=binomial, x=TRUE, data=pima)
+
+stargazer(l1, l2, l3, se=list(NULL, NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+pseudoR2=(l3$null.deviance-l3$deviance)/l3$null.deviance
+print(paste("pseudo_R2 for model 3",pseudoR2)) 
+
+fm3a=maBina(l3, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, se=list(NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3"),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'BMI' in the model increased log likelihood of the third model from -470.549 to -430.165. 
+2. Omitted variable bias corrected- By adding statistically significant variable 'BMI',the coefficient of VOI went up 
+  from 0.018 to 0.020. Therefore, adding the variable 'BMI' corrected 'downward omitted variable bais'. 
+3. The AIC(Akaike Inf.Crit) has reduced from 947.098 to 868.330, showing that the model is getting better with an addition of the variable.
+    The lower the AIC value the better.
+    
+**Pseudo_r2:**
+    Pseudo_R2 increased from 0.05272 to 0.13. This shows that adding the variabale 'BMI' increased the explanatory power of the model from 5.2% to 13%.
+    
+##### <span style="color: darkblue;">Adding variable 'Glucose' in the model </span>
+```{r}
+l4 = glm(Outcome~Pregnancies+Age+BMI+Glucose, family=binomial, x=TRUE, data=pima)
+
+
+stargazer(l1, l2, l3,l4, se=list(NULL, NULL, NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", "logit-4"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l2 model
+pseudoR2=(l4$null.deviance-l4$deviance)/l4$null.deviance
+print(paste("pseudo_R2 for model 4",pseudoR2)) 
+
+
+fm4a=maBina(l4, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, fm4a, se=list(NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'Glucose' in the model increased log likelihood of the fourth model from -430.165 to -361.777. 
+2. Omitted variable bias corrected- By adding statistically significant variable 'Glucose',the coefficient of VOI went up 
+  from 0.020 to 0.024. Therefore, adding the variable 'Glucose' corrected 'downward omitted variable bais'. 
+3. The AIC(Akaike Inf.Crit) has reduced from 868.330 to 733.554, showing that the model is getting better with an addition of the variable.
+    The lower the AIC value the better.
+
+**Pseudo_r2:**
+    Pseudo_R2 increased from 0.13 to 0.2717. This shows that adding the variabale 'Glucose level' increased the explanatory power of the model from 13% to 27%.
+    
+##### <span style="color: darkblue;"> Adding variable 'DiabetesPedigreeFunction' in the model </span>
+```{r}
+l5 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction, family=binomial, x=TRUE, data=pima)
+
+
+stargazer(l1, l2, l3,l4,l5, se=list(NULL, NULL, NULL, NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", "logit-4", "logit-5"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l2 model
+pseudoR2=(l5$null.deviance-l5$deviance)/l5$null.deviance
+print(paste("pseudo_R2 for model 5",pseudoR2)) 
+
+
+fm5a=maBina(l5, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, fm4a, fm5a, se=list(NULL, NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'DiabetesPedigreeFunction' in the model increased log likelihood of the fifth model from -361.777 to -357.261
+2. Omitted variable bias corrected- By adding statistically significant variable 'DiabetesPedigreeFunction',the coefficient of VOI went up from          0.024 to 0.026. Therefore, adding the variable 'DiabetesPedigreeFunction' corrected 'downward omitted variable bais'.
+3. The AIC(Akaike Inf.Crit) has reduced from 733.554 to 726.521, showing that the model is getting better with an addition of the variable.
+    The lower the AIC value the better.
+
+**Pseudo_r2:**
+    Pseudo_R2 increased from 0.2717 to 0.280. This shows that adding the variabale 'Glucose level' increased the explanatory power of the model from 27.17% to 28%. 
+    
+##### <span style="color: darkblue;"> Adding variable 'BloodPressure' in the model </span>
+```{r}
+l6 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure, family=binomial, x=TRUE, data=pima)
+
+
+stargazer(l1, l2, l3,l4,l5,l6, se=list(NULL, NULL, NULL, NULL, NULL,NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", "logit-4", "logit-5", "logit-6"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l2 model
+pseudoR2=(l6$null.deviance-l6$deviance)/l6$null.deviance
+print(paste("pseudo_R2 for model 6",pseudoR2)) 
+
+
+fm6a=maBina(l6, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, fm4a, fm5a, fm6a,se=list(NULL, NULL, NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5', 'logit-6'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'BloodPressure' in the model increased log likelihood of the sixth model from -357.261 to -356.736.
+2. Omitted variable bias already corrected in Model 5. 
+3. The AIC(Akaike Inf.Crit) has increased from 726.521 to 727.473, showing that the addition of the new variable is actually puling the model             down. The new variable - 'BloodPressure' does not help in explaining our causal relationship. 
+
+
+**Pseudo_r2:**
+    Pseudo_R2 increased from 0.280 to 0.281. This shows that adding the variabale 'BloodPressure' increased the explanatory power of the model from 28% to 28.1%. We see miniscule change in pseudo_r2 implementing that BloodPResuure does not contribute to effect the chance of getting diabetes if you are pregnant.
+
+##### <span style="color: darkblue;"> Adding variable 'Skin Thickness' in the model </span>
+```{r}
+l7 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure+SkinThickness, family=binomial, x=TRUE, data=pima)
+
+
+stargazer(l1, l2, l3,l4,l5,l6, l7, se=list(NULL, NULL, NULL, NULL, NULL,NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", "logit-4", "logit-5", "logit-6", "logit-7"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l2 model
+pseudoR2=(l7$null.deviance-l7$deviance)/l7$null.deviance
+print(paste("pseudo_R2 for model 7",pseudoR2)) 
+
+
+fm7a=maBina(l7, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, fm4a, fm5a, fm6a,fm7a,se=list(NULL, NULL, NULL, NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5', 'logit-6', 'logit-7'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'SkinThickness' in the model increased log likelihood of the seventh model from -356.736 to -356.731. It's a trivial change in the model as we see that
+  SkinThickness is not a statistically significant model.
+2. Omitted variable bias already corrected in Model 5. 
+3. The AIC(Akaike Inf.Crit) has increased from 727.473 to  729.462, showing that the addition of the new variable is actually puling the model     further down. The new variable - 'SkinThickness' does not as well help in explaining our causal relationship. 
+
+
+**Pseudo_r2:**
+    Pseudo_R2 did not increase much. This shows that adding the variabale 'SkinThickness' does not effect the chances of getting diabetes if you are pregnant.
+
+##### <span style="color: darkblue;"> Adding variable 'Insulin' in the model </span>  
+```{r}
+l8 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure+SkinThickness+Insulin, family=binomial, x=TRUE, data=pima)
+
+
+stargazer(l1, l2, l3,l4,l5,l6, l7, l8,se=list(NULL, NULL, NULL, NULL, NULL,NULL, NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", "logit-4", "logit-5", "logit-6", "logit-7", "logit-8"),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+## For l2 model
+pseudoR2=(l8$null.deviance-l8$deviance)/l8$null.deviance
+print(paste("pseudo_R2 for model 8",pseudoR2)) 
+
+
+fm8a=maBina(l8, x.mean=TRUE, rev.dum=TRUE, digits=3)
+stargazer(fm1a, fm2a, fm3a, fm4a, fm5a, fm6a,fm7a, fm8a,se=list(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5', 'logit-6', 'logit-7', 'logit-8'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+1. Adding 'Insulin' in the model increased log likelihood of the eigth model from -356.731 to -356.719. It's a trivial change in the model as we see that
+  Insulin is not a statistically significant model.
+2. Omitted variable bias already corrected in Model 5. 
+3. The AIC(Akaike Inf.Crit) has increased from 729.462 to  731.438 , showing that the addition of the new variable is actually puling the model     further down. The new variable - 'Insulin' does not as well help in explaining our causal relationship. 
+
+
+**Pseudo_r2:**
+    Pseudo_R2 did not increase much. This shows that adding the variabale 'Insulin' does not effect the chances of getting diabetes if you are pregnant.
+
+## <span style="color: darkblue;"> Best Model:</span>
+
+*The best model is **Model 5.** *
+
+- Omitted variable bias has been corrected by this model.
+The slope coefficient did not change after Model 5.
+This shows that all the relevant control variables have been accounted for in this model.
+
+- In this model , we achieved E(Beta1(hat))=Beta1 = 0.026***
+
+- Adding more variables after this model did not help in increasing pseudo_r2 much. 
+
+- Loglikelihood : <i> -357.261 and Model 8- -356.719 </i>
+
+- Goodness of fit : AIC value(Akaike Inf. Crit.) - Lower value of AIC means the better the model. <i>AIC : model 5 - 726.521 </i>
+
+##### <span style="color: darkblue;"> Table for all logit models </span>
+```{r}
+
+l1 = glm(Outcome~Pregnancies, family=binomial, x=TRUE,  data=pima)
+l2 = glm(Outcome~Pregnancies+Age, family=binomial, x=TRUE,  data=pima)
+l3 = glm(Outcome~Pregnancies+Age+BMI, family=binomial, x=TRUE, data=pima)
+l4 = glm(Outcome~Pregnancies+Age+BMI+Glucose, family=binomial, x=TRUE, data=pima)
+l5 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction, family=binomial, x=TRUE, data=pima)
+l6 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure, family=binomial, x=TRUE, data=pima)
+l7 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure+SkinThickness, family=binomial, x=TRUE, data=pima)
+l8 = glm(Outcome~Pregnancies+Age+BMI+Glucose+DiabetesPedigreeFunction+BloodPressure+SkinThickness+Insulin, family=binomial, x=TRUE, data=pima)
+
+
+
+stargazer(l1, l2, l3, l4, l5, l6,l7,l8,  se=list(NULL, NULL, NULL, NULL, NULL, NULL),
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5', 'logit-6','logit-7', 'logit-8'),
+          title='Logit-  Pregnancy and Diabetes', type='text',
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+
+stargazer(fm1a, fm2a, fm3a, fm4a, fm5a, fm6a,fm7a, fm8a,se=list(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), 
+          column.labels=c("logit-1", "logit-2", "logit-3", 'logit-4', 'logit-5', 'logit-6', 'logit-7', 'logit-8'),
+          title="Logit- Marginal Effects", type="text", 
+          star.cutoffs = c(0.05,0.01,0.001), df=FALSE, digits=3)
+```
+
+##### <span style="color: darkblue;"> Interpretation of each model: </span>
+
+* *Logit 1*: 
+    * Increasing the numnber of pregnancies by 1, will increase the chance of getting diabetes by 0.03%.
+    
+* *Logit 2*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.018%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.007%.
+    
+* *Logit 3*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.020%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.007%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.24%.
+    
+* *Logit 4*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.024%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.002%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.19%.
+    * Keeping all other variables constant, increasing glucose level by 10%, will increase the chance of getting diabetes, on an average, by 0.08%. 
+    
+
+- **Logit 5**:
+ 
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.026%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.002%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.19%.
+    * Keeping all other variables constant, increasing glucose level by 10%, will increase the chance of getting diabetes, on an average, by 0.08%. 
+    * Keeping all other variables constant, increasing DiabetesPedigreeFunction level by 10%, will increase the chance of getting diabetes, on an average, by 1.83%.
+    
+* *Logit 6*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.026%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.003%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.20%.
+    * Keeping all other variables constant, increasing glucose level by 10%, will increase the chance of getting diabetes, on an average, by 0.08%. 
+    * Keeping all other variables constant, increasing DiabetesPedigreeFunction level by 10%, will increase the chance of getting diabetes, on an average, by 1.80%. 
+    * Keeping all other variables constant, increasing BloodPressure level by 1 mm Hg, will decrease the chance of getting diabetes, on an average, by 0.002%. This variable is not statistically significant. 
+
+* *Logit 7*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.026%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.003%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.20%.
+    * Keeping all other variables constant, increasing glucose level by 10%, will increase the chance of getting diabetes, on an average, by 0.08%. 
+    * Keeping all other variables constant, increasing DiabetesPedigreeFunction level by 10%, will increase the chance of getting diabetes, on an average, by 1.81%. 
+    * Keeping all other variables constant, increasing BloodPressure level by 1 mm Hg, will decrease the chance of getting diabetes, on an average, by 0.002%. This variable is not statistically significant.
+    * Keeping all other variables constant, increasing SkinThickness by 1 mm, will not increase the chance of getting diabetes. This variable is not statistically significant.
+
+* *Logit 8*:
+    * Keeping all other variables constant, increasing the number of preganancies by 1, will increase the chance of getting diabetes, on an average, by 0.026%. 
+    * Keeping all other variables constant, increasing the age by 1 year, will increase the chance of getting diabetes, on an average, by 0.003%. 
+    * Keeping all other variables constant, increasing the BMI by 10%, will increase the chance of getting diabetes, on an average, by 0.20%.
+    * Keeping all other variables constant, increasing glucose level by 10%, will increase the chance of getting diabetes, on an average, by 0.08%. 
+    * Keeping all other variables constant, increasing DiabetesPedigreeFunction level by 10%, will increase the chance of getting diabetes, on an average, by 1.80%. 
+    * Keeping all other variables constant, increasing BloodPressure level by 1 mm Hg, will decrease the chance of getting diabetes, on an average, by 0.002%. This variable is not statistically significant.
+    * Keeping all other variables constant, increasing SkinThickness by 1 mm, will not increase the chance of getting diabetes. This variable is not statistically significant.
+    * Keeping all other variables constant, increasing Insulin by 1 mm U/ml, will not increase the chance of getting diabetes. This variable is not statistically significant.
+
+
+##### <span style="color: steelblue;"> **Note :** *Though Age, Insulin, Skinthickness and BloodPressure are also major causes for diabetes, we see that these variables are not statistically significant in our models because of the multicolinearity that exists between: Glucose-Insulin, Pregnancies-Age, SkinThickness-BMI.* </span>
+
+
+## <span style="color: darkblue;"> Wald and Chi-Square Test </span>
+
+**Chi-Square, DF and Pr > ChiSq –** 
+
+* The null hypothesis is that all of the regression coefficients in the model are equal to zero.
+
+* The small p-value from the all three tests would lead us to conclude that at least one of the regression coefficients in the model is not equal to zero.
+
+
+```{r}
+library(car)
+
+Anova(l5, type="II", test="Wald")
+```
+
+
+- Although the Age variable is insignificant in this model, we include age as it is one of the major causes of the person getting diabetes and       Age and Pregnancies are also related.
+
+```{r}
+anova(l5,
+      update(l5, ~1),    # update here produces null model for comparison
+      test="Chisq")
+```
+
+- We are testing the probability (PR>ChiSq) of observing  a Chi-Square statistic as extreme as, or more so, than the observed one under the null hypothesis; The DF defines the distribution of the Chi-Square test statistics and is defined by the number of predictors in the model. 
+- Typically,  PR>ChiSq is compared to a specified alpha level, our willingness to accept a type I error, which is typically set at 0.05 or 0.01.
+- The small p-value from the all three tests would lead us to conclude that at least one of the regression coefficients in the model is not equal to zero.
+
+
+## <span style="color: darkblue;"> Validity & limitations </span>
+* **Threats to Internal Validity:**
+    + Omitted variable Bias : Added control variables till the estimate β1 was consistent.
+    + Misspecification of the functional form : Dependent variable is binary, so we used Logit.
+    + Measurement errors : Could be present, not enough information to account for it.
+    + Missing data and sample selection : Imputed missing values using KNN imputation methods after checking for outliers in the variables of interest.
+
+* **Threats to External  Validity:**
+    + Differences in populations : Estimated results for PIMA indian women might not hold true for females of all races. 
+    + Differences in settings : Diagnostic and treatment procedures may vary. 
+
+
+## <span style="color: darkblue;"> Conclusion & Recommendation: </span>
+
+This study concluded that Pima women with greater number of pregnancies are at higher risk of getting diabetes. However, we saw that hereditary is also more likely to contribute to early onset of diabetes in the Pimas offspring generation.
+
+<span style="color: darkblue;"> **Recommendation:** </span>
+
+* Early diagnosis of diabetes onset in pregnant PIMA women.
+* Continuing genetic research to prevent disease and reduce its complications. Especially the gestational diabetes and control of gestational diabetes to avoid complications of fetal uterine growth.
+
+
+
