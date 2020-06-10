@@ -1,4 +1,4 @@
-# PIMA-Diabetes-Explaining-Causal-Effects
+# Does pregnancies lead to diabetes?
 
 * This study was carried out to investigate the significance of health-related predictors of diabetes in Pima Indian Women. 
 * Many types of research by the U.S health department show that Native Americans are at more risk of getting diabetes than any other racial group. 
